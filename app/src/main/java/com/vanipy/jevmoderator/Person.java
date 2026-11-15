@@ -1,4 +1,4 @@
-package com.irvanputra.jevmoderator;
+package com.vanipy.jevmoderator;
 
 /** One detected body in the camera frame. Position only: no identity, no face recognition. */
 final class Person {

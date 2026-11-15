@@ -1,4 +1,4 @@
-package com.irvanputra.jevmoderator;
+package com.vanipy.jevmoderator;
 
 import android.Manifest;
 import android.content.pm.PackageManager;

@@ -1,4 +1,4 @@
-package com.irvanputra.jevmoderator;
+package com.vanipy.jevmoderator;
 
 import org.json.JSONObject;
 import java.io.ByteArrayOutputStream;

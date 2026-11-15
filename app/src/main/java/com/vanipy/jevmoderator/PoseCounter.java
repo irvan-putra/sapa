@@ -1,4 +1,4 @@
-package com.irvanputra.jevmoderator;
+package com.vanipy.jevmoderator;
 
 import ai.onnxruntime.OnnxTensor;
 import ai.onnxruntime.OrtEnvironment;
