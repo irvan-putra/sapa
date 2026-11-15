@@ -43,7 +43,7 @@ jobs:
           SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
           AAPT=$(find "$SDK/build-tools" -type f -name aapt | sort -V | tail -1)
           test -n "$AAPT"
-          "$AAPT" dump badging "$APK" | grep -F "package: name='com.vanipy.sapa'"
+          "$AAPT" dump badging "$APK" | grep -F "package: name='com.vanipy.sapa' versionCode='13' versionName='0.5.6'"
 
       - name: Upload qualification APK
         uses: actions/upload-artifact@v4
