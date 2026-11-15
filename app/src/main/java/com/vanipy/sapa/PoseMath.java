@@ -1,4 +1,4 @@
-package com.vanipy.jevmoderator;
+package com.vanipy.sapa;
 
 import java.util.ArrayList;
 import java.util.Collections;

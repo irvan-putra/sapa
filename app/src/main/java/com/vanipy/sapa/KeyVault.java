@@ -1,4 +1,4 @@
-package com.vanipy.jevmoderator;
+package com.vanipy.sapa;
 
 import android.content.Context;
 import android.content.SharedPreferences;

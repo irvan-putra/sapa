@@ -1,9 +1,9 @@
 plugins { id 'com.android.application' }
 android {
-    namespace 'com.vanipy.jevmoderator'
+    namespace 'com.vanipy.sapa'
     compileSdk 34
     defaultConfig {
-        applicationId 'com.vanipy.jevmoderator'
+        applicationId 'com.vanipy.sapa'
         minSdk 26
         targetSdk 34
         versionCode 12

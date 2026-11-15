@@ -1,4 +1,4 @@
-package com.vanipy.jevmoderator;
+package com.vanipy.sapa;
 
 import org.json.JSONObject;
 import java.io.ByteArrayOutputStream;

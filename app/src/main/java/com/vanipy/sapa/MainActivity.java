@@ -1,4 +1,4 @@
-package com.vanipy.jevmoderator;
+package com.vanipy.sapa;
 
 import android.Manifest;
 import android.content.pm.PackageManager;

@@ -1,4 +1,4 @@
-package com.vanipy.jevmoderator;
+package com.vanipy.sapa;
 
 /** One detected body in the camera frame. Position only: no identity, no face recognition. */
 final class Person {
