@@ -10,7 +10,7 @@ argv = sys.argv[1:]
 if '--preview' in argv:
     i = argv.index('--preview'); del argv[i:i + 2]
 args = argv
-sticker_path = args[0] if args else '/tmp/jev-assets/sticker.webp'
+sticker_path = args[0] if args else os.path.join(root, 'tools/assets/sapa-sticker.png')
 preview = sys.argv[sys.argv.index('--preview') + 1] if '--preview' in sys.argv else None
 ver = re.search(r'versionName\s+"([^"]+)"', open(os.path.join(root, 'app/build.gradle')).read()).group(1)
 label = 'v' + ver

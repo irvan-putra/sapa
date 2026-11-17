@@ -23,6 +23,8 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
+      - name: Verify versioned launcher assets
+        run: python3 tools/check-icon-version.py
       - name: Verifier self-test (synthetic bad inputs must fail)
         run: bash tools/test-verify-signed-apk.sh
       - name: Repo CI must have succeeded on this exact commit
