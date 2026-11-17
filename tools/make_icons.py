@@ -1,67 +1,165 @@
 #!/usr/bin/env python3
-"""Regenerate launcher icons with the app version drawn on them.
-Reads versionName from app/build.gradle so the badge always matches the build.
-Usage: python3 tools/make_icons.py [path/to/sticker.(webp|png)] [--preview out.png]
+"""Launcher icon generator: one picture plus the shared version badge.
+
+Deterministic. Same version in, same PNGs out. Inputs are pinned: Pillow
+PILLOW_PIN and DejaVu Sans Bold with sha256 FONT_SHA256. The script fails
+instead of falling back to another font or Pillow version, because a
+different rasterizer or font changes the pixels.
+    pip install pillow==12.3.0   (fonts-dejavu-core provides the font)
+
+Badge: numbers only, a full-width strip across the bottom 24% of the icon.
+Picture safety: every picture pixel is checked to lie inside the circle that
+touches the icon edges (shrunk by a margin), so round launcher masks do not
+clip it; the version text is checked the same way.
 """
-import os, re, sys
-from PIL import Image, ImageDraw, ImageFont
-root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-argv = sys.argv[1:]
-if '--preview' in argv:
-    i = argv.index('--preview'); del argv[i:i + 2]
-args = argv
-sticker_path = args[0] if args else os.path.join(root, 'tools/assets/sapa-sticker.png')
-preview = sys.argv[sys.argv.index('--preview') + 1] if '--preview' in sys.argv else None
-ver = re.search(r'versionName\s+"([^"]+)"', open(os.path.join(root, 'app/build.gradle')).read()).group(1)
-label = 'v' + ver
+import glob, hashlib, json, math, os, re, sys
+import PIL
+from PIL import Image, ImageChops, ImageDraw, ImageFont
+
+PILLOW_PIN = "12.3.0"
+FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+FONT_SHA256 = "d1c3ff99f1e1ce1827a33efd4dad81f40babda06bff9e43bd7591c86662a287b"
+DENSITIES = {"mdpi": 48, "hdpi": 72, "xhdpi": 96, "xxhdpi": 144, "xxxhdpi": 192}
+S = 768
+STRIP_TOP = 0.76      # strip covers 76%..100% of the icon height
+TEXT_SIZE = 0.115     # numeral size, fraction of icon size
+SAFE_R = 0.485        # picture and text must stay inside this radius (fraction)
+
+if PIL.__version__ != PILLOW_PIN:
+    sys.exit("Pillow %s required, found %s" % (PILLOW_PIN, PIL.__version__))
+
+
+def font(px):
+    if not os.path.exists(FONT_PATH):
+        sys.exit("missing font " + FONT_PATH)
+    if hashlib.sha256(open(FONT_PATH, "rb").read()).hexdigest() != FONT_SHA256:
+        sys.exit("unexpected font file " + FONT_PATH)
+    return ImageFont.truetype(FONT_PATH, px)
+
+
+def circle_mask(size, r=SAFE_R):
+    m = Image.new("L", (size, size), 0)
+    ImageDraw.Draw(m).ellipse([size * (.5 - r), size * (.5 - r), size * (.5 + r), size * (.5 + r)], fill=255)
+    return m
+
+
+def assert_inside_circle(layer, what, size=S, r=SAFE_R):
+    alpha = layer.getchannel("A").point(lambda v: 255 if v > 8 else 0)
+    outside = ImageChops.multiply(alpha, ImageChops.invert(circle_mask(size, r)))
+    box = outside.getbbox()
+    if box:
+        sys.exit("%s leaves the round-mask safe circle at %s" % (what, box))
+
+
+def new_layer(size=S):
+    img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    return img, ImageDraw.Draw(img)
+
+
+def sparkle(d, cx, cy, r, fill, size=S):
+    pts = []
+    for i in range(96):
+        t = i * 2 * math.pi / 96
+        pts.append((cx * size + r * size * math.cos(t) ** 3, cy * size + r * size * math.sin(t) ** 3))
+    d.polygon(pts, fill=fill)
+
+
+def rrect(d, box, radius, fill, size=S):
+    d.rounded_rectangle([c * size for c in box], radius=radius * size, fill=fill)
+
+
+def compose(bg, art, version, strip, text, rounded=None, size=S, circle_check=True):
+    """Background, then the picture layer, then the badge strip."""
+    if circle_check:
+        assert_inside_circle(art, "picture", size)
+    base = Image.new("RGBA", (size, size), bg) if bg else Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    base.alpha_composite(art)
+    d = ImageDraw.Draw(base)
+    y0 = int(size * STRIP_TOP)
+    d.rectangle([0, y0, size, size], fill=strip)
+    tl, td = new_layer(size)
+    f = font(int(size * TEXT_SIZE))
+    td.text((size / 2, (y0 + size) / 2), version, font=f, fill=text, anchor="mm")
+    if circle_check:
+        assert_inside_circle(tl, "version text", size)
+    base.alpha_composite(tl)
+    if rounded:
+        m = Image.new("L", (size, size), 0)
+        ImageDraw.Draw(m).rounded_rectangle([0, 0, size - 1, size - 1], radius=rounded * size, fill=255)
+        base.putalpha(ImageChops.multiply(base.getchannel("A"), m))
+    return base
+
+
+def parse_version(argv, fallback=None):
+    v = argv[1] if len(argv) > 1 else fallback
+    if not v or not re.fullmatch(r"\d+\.\d+\.\d+", v):
+        sys.exit("version must be X.Y.Z")
+    return v
+
+
+def write_densities(img, res_dir, name="ic_launcher.png"):
+    for dens, px in DENSITIES.items():
+        out = os.path.join(res_dir, "mipmap-" + dens)
+        os.makedirs(out, exist_ok=True)
+        img.resize((px, px), Image.LANCZOS).save(os.path.join(out, name), optimize=True)
+
+
 BG = (234, 242, 251, 255)
-FONTS = ['/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
-         '/usr/local/lib/python3.10/dist-packages/matplotlib/mpl-data/fonts/ttf/DejaVuSans-Bold.ttf']
-fontfile = next(f for f in FONTS if os.path.exists(f))
-s = Image.open(sticker_path).convert('RGBA'); s = s.crop(s.getbbox())
+BAND, TEXT = (20, 33, 61, 255), (255, 255, 255, 255)
 
-def fit(img, size, frac, cy):
-    w, h = img.size; k = size * frac / max(w, h)
+
+def _fit(img, size, frac, cy):
+    w, h = img.size
+    k = size * frac / max(w, h)
     r = img.resize((max(1, int(w * k)), max(1, int(h * k))), Image.LANCZOS)
-    c = Image.new('RGBA', (size, size), (0, 0, 0, 0))
-    c.paste(r, ((size - r.width) // 2, int(size * cy - r.height / 2)), r); return c
+    c = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    c.paste(r, ((size - r.width) // 2, int(size * cy - r.height / 2)), r)
+    return c
 
-def badge(canvas, size, cx, cy, h):
-    """Dark pill with white version text; h = pill height in px of this canvas."""
-    d = ImageDraw.Draw(canvas)
-    fs = int(h * 0.72)
-    f = ImageFont.truetype(fontfile, fs)
-    tw = d.textlength(label, font=f); w = int(tw + h * 0.7)
-    box = (cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2)
-    d.rounded_rectangle(box, radius=h / 2, fill=(20, 33, 61, 255))
-    d.text((cx, cy), label, font=f, fill=(255, 255, 255, 255), anchor='mm')
 
-def foreground(size):
-    c = fit(s, size, 0.42, 0.42); k = size / 432
-    badge(c, size, size // 2, int(312 * k), max(8, int(50 * k))); return c
+def legacy(version, sticker):
+    return compose(BG, _fit(sticker, S, .52, .38), version, BAND, TEXT, rounded=.2)
 
-def legacy(px):
-    b = Image.new('RGBA', (px, px), BG); b.alpha_composite(fit(s, px, 0.60, 0.40))
-    badge(b, px, px // 2, int(px * 0.80), max(8, int(px * 0.26)))
-    m = Image.new('L', (px, px), 0); ImageDraw.Draw(m).rounded_rectangle((0, 0, px - 1, px - 1), radius=px // 5, fill=255)
-    o = Image.new('RGBA', (px, px), (0, 0, 0, 0)); o.paste(b, (0, 0), m); return o
 
-if not preview:
-    for d, px in [('mdpi', 108), ('hdpi', 162), ('xhdpi', 216), ('xxhdpi', 324), ('xxxhdpi', 432)]:
-        foreground(px).save(os.path.join(root, f'app/src/main/res/mipmap-{d}/ic_launcher_foreground.png'))
-    for d, px in [('mdpi', 48), ('hdpi', 72), ('xhdpi', 96), ('xxhdpi', 144), ('xxxhdpi', 192)]:
-        legacy(px).save(os.path.join(root, f'app/src/main/res/mipmap-{d}/ic_launcher.png'))
-    print('icons written for', label)
-else:
-    base = Image.new('RGBA', (432, 432), BG); base.alpha_composite(foreground(432))
-    P = Image.new('RGBA', (1500, 470), (120, 120, 120, 255)); a = 72
-    for i, shape in enumerate(['circle', 'round']):
-        m = Image.new('L', (432, 432), 0); dr = ImageDraw.Draw(m); box = (a, a, 432 - a, 432 - a)
-        dr.ellipse(box, fill=255) if shape == 'circle' else dr.rounded_rectangle(box, radius=70, fill=255)
-        c = Image.new('RGBA', (432, 432), (0, 0, 0, 0)); c.paste(base, (0, 0), m); P.alpha_composite(c, (10 + i * 440, 20))
-    P.alpha_composite(legacy(192).resize((288, 288)), (890, 20))
-    # small, launcher-like sizes
-    sm = base.resize((144, 144), Image.LANCZOS); m = Image.new('L', (144, 144), 0)
-    ImageDraw.Draw(m).ellipse((24, 24, 120, 120), fill=255); c = Image.new('RGBA', (144, 144), (0, 0, 0, 0)); c.paste(sm, (0, 0), m)
-    P.alpha_composite(c, (1200, 20)); P.alpha_composite(legacy(96), (1200, 190)); P.alpha_composite(legacy(48), (1320, 190))
-    P.save(preview); print('preview', label)
+def foreground(version, sticker, size=432):
+    """Adaptive foreground. The launcher shows the middle two thirds (the
+    visible square, 72..360 of 432). The picture and the number sit inside the
+    circle of that area, and the same full-width bottom strip as the legacy icon
+    covers the bottom 24% of the visible area (and bleeds past it, so every mask
+    shape shows a strip, not a floating pill)."""
+    v0, vs = size / 6.0, size * 2 / 3.0       # visible square origin and side (72, 288)
+    art = _fit(sticker, size, .52 * vs / size, (v0 + .38 * vs) / size)
+    assert_inside_circle(art, "sticker", size, r=.333)
+    tl, td = new_layer(size)
+    top = v0 + STRIP_TOP * vs
+    td.text((size / 2, (top + v0 + vs) / 2), version, font=font(int(vs * TEXT_SIZE)), fill=TEXT, anchor="mm")
+    assert_inside_circle(tl, "version text", size, r=.333)
+    out = art
+    ImageDraw.Draw(out).rectangle([0, top, size, size], fill=BAND)
+    out.alpha_composite(tl)
+    return out
+
+
+def main():
+    here = os.path.dirname(os.path.abspath(__file__))
+    root = os.path.abspath(os.path.join(here, ".."))
+    gradle = open(os.path.join(root, "app/build.gradle")).read()
+    version = parse_version(sys.argv, re.search(r'versionName\s+"([^"]+)"', gradle).group(1))
+    sticker = Image.open(os.path.join(here, "assets", "sapa-sticker.png")).convert("RGBA")
+    sticker = sticker.crop(sticker.getbbox())
+    res = os.path.join(root, "app/src/main/res")
+    write_densities(legacy(version, sticker), res)
+    for dens, px in (("mdpi", 108), ("hdpi", 162), ("xhdpi", 216), ("xxhdpi", 324), ("xxxhdpi", 432)):
+        foreground(version, sticker, 432).resize((px, px), Image.LANCZOS).save(
+            os.path.join(res, "mipmap-" + dens, "ic_launcher_foreground.png"), optimize=True)
+    files = sorted(glob.glob(os.path.join(res, "mipmap-*", "ic_launcher*.png")))
+    manifest = {"version": version,
+                "sha256": {os.path.relpath(p, root): hashlib.sha256(open(p, "rb").read()).hexdigest() for p in files}}
+    with open(os.path.join(here, "icon-manifest.json"), "w") as fh:
+        json.dump(manifest, fh, indent=2, sort_keys=True)
+        fh.write("\n")
+    print("wrote icons and manifest for", version)
+
+
+if __name__ == "__main__":
+    main()
