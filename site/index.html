@@ -48,14 +48,14 @@ a{color:var(--ac)}
 <div class="row"><button class="p" id="pe">Everyone seen</button><button class="r" id="ph">Raised hands</button><button id="un">Unfreeze</button></div>
 <div id="pk">-</div><div class="row"><button id="pn">Random number 1..N (no camera)</button></div></div>
 
-<p class="note">Detection: YOLOv8n-pose (Ultralytics, AGPL-3.0) with ONNX Runtime Web (MIT), both served from this site. Source (AGPL-3.0): <a href="https://github.com/irvan-putra/sapa">sapa</a> · <a href="https://github.com/irvan-putra/sapa/releases">Android app</a> · <a href="https://vanipy.com/kaji/apk/">all apps</a></p>
+<p class="note">Detection: YOLOv8n-pose (Ultralytics, AGPL-3.0) with ONNX Runtime Web (MIT), both served from this site. Notices: <a href="NOTICE.txt">NOTICE.txt</a>, <a href="ort/LICENSE-onnxruntime-web-MIT.txt">MIT text</a>. Source (AGPL-3.0): <a href="https://github.com/irvan-putra/sapa">sapa</a> · <a href="https://github.com/irvan-putra/sapa/releases">Android app</a> · <a href="https://vanipy.com/kaji/apk/">all apps</a></p>
 </main>
 <script src="ort/ort.wasm.min.js"></script>
 <script>
 "use strict";
 const S=640,CONF=.30,KP=.40,NMS=.5,ACC_FULL=.40,ACC_TILE=.50,EV=.5,MINKP=5;
 const $=id=>document.getElementById(id);
-let session=null,stream=null,running=false,busy=false,frozen=false,hist=[],poses=[],lastFrame=null,peak=0,roundPeople=0,roundUntil=0,people=0,hands=0,mP=0,mH=0,log=[],pickedIdx=-1;
+let srcMode="camera",session=null,stream=null,running=false,busy=false,frozen=false,hist=[],poses=[],lastFrame=null,peak=0,roundPeople=0,roundUntil=0,people=0,hands=0,mP=0,mH=0,log=[],pickedIdx=-1;
 const work=document.createElement("canvas");
 function iou(a,b){const ax0=a.cx-a.w/2,ay0=a.cy-a.h/2,ax1=a.cx+a.w/2,ay1=a.cy+a.h/2,bx0=b.cx-b.w/2,by0=b.cy-b.h/2,bx1=b.cx+b.w/2,by1=b.cy+b.h/2;
  const iw=Math.max(0,Math.min(ax1,bx1)-Math.max(ax0,bx0)),ih=Math.max(0,Math.min(ay1,by1)-Math.max(ay0,by0)),i=iw*ih;return i/(a.w*a.h+b.w*b.h-i+1e-9)}
@@ -90,7 +90,7 @@ async function count(src,W,H,wide){const all=[];for(const d of await infer(src,0
 async function loadModel(){if(session)return;$("st").textContent="Loading model (about 13 MB)...";
  ort.env.wasm.numThreads=1;ort.env.wasm.proxy=true;ort.env.wasm.wasmPaths=new URL("ort/",location.href).href;session=await ort.InferenceSession.create("yolov8n-pose.onnx",{executionProviders:["wasm"]})}
 function effP(){return $("man").checked?mP:people}function effH(){return $("man").checked?mH:hands}
-function render(){$("mp").textContent=effP();$("mh").textContent=effH();$("mk").textContent=peak;$("src").textContent="source: "+($("man").checked?`manual numbers (people ${mP}, hands ${mH})`:"camera")}
+function render(){$("mp").textContent=effP();$("mh").textContent=effH();$("mk").textContent=peak;$("src").textContent="source: "+($("man").checked?`manual numbers (people ${mP}, hands ${mH})`:srcMode==="photo"?"photo (one pass, picked file)":"camera")}
 const cv=$("o");
 function draw(list,W,H,chosen){cv.width=W;cv.height=H;const g=cv.getContext("2d");g.clearRect(0,0,W,H);g.lineWidth=Math.max(2,W/200);
  list.forEach((p,i)=>{g.strokeStyle=i===chosen?"#ffd400":p.raised?"#ff4a55":"#4cd0a8";g.lineWidth=i===chosen?Math.max(5,W/80):Math.max(2,W/200);g.strokeRect(p.x0*W,p.y0*H,(p.x1-p.x0)*W,(p.y1-p.y0)*H)})}
@@ -113,7 +113,7 @@ async function startCam(){
  try{await loadModel()}catch(e){status("Model failed: "+e.message+". Manual mode still works.");$("cam").disabled=false;return}
  try{stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"},width:{ideal:1280},height:{ideal:960}},audio:false})}
  catch(e){status("Camera unavailable ("+e.name+"). Manual +/- and the number picker still work.");$("cam").disabled=false;return}
- const v=$("v");v.srcObject=stream;await v.play();running=true;frozen=false;hist=[];$("cam").textContent="Stop camera";$("cam").disabled=false;status("Running (YOLOv8n-pose in your browser). Counts only people the camera can see.");loop()}
+ const v=$("v");v.srcObject=stream;await v.play();running=true;frozen=false;srcMode="camera";hist=[];$("cam").textContent="Stop camera";$("cam").disabled=false;status("Running (YOLOv8n-pose in your browser). Counts only people the camera can see.");loop()}
 function stopCam(){running=false;if(stream)stream.getTracks().forEach(t=>t.stop());stream=null;$("v").srcObject=null;hist=[];$("cam").textContent="Start camera";status("Camera off.");cv.getContext("2d").clearRect(0,0,cv.width,cv.height)}
 $("cam").onclick=()=>running?stopCam():startCam();
 document.addEventListener("visibilitychange",()=>{if(document.hidden&&running)stopCam()});
@@ -121,7 +121,7 @@ $("photo").onclick=()=>$("pf").click();
 $("pf").onchange=async e=>{const f=e.target.files[0];e.target.value="";if(!f)return;
  try{await loadModel();status("Checking photo...");const im=await createImageBitmap(f);const fc=document.createElement("canvas");fc.width=im.width;fc.height=im.height;fc.getContext("2d").drawImage(im,0,0);
   if(running)stopCam();
-  const list=await count(fc,fc.width,fc.height,$("wide").checked);poses=list;lastFrame=fc;people=list.length;hands=list.filter(p=>p.raised).length;frozen=true;
+  srcMode="photo";const list=await count(fc,fc.width,fc.height,$("wide").checked);poses=list;lastFrame=fc;people=list.length;hands=list.filter(p=>p.raised).length;frozen=true;
   const v=$("v");v.style.visibility="hidden";draw(list,fc.width,fc.height,-1);cv.style.background="#000";cv.getContext("2d").save();
   status(`Photo: ${people} people, ${hands} raised hands (one pass, no two-frame check; the photo stays in this browser).`);render();showFrozen()}catch(x){status("Photo check failed: "+x.message)}};
 function showFrozen(){if(!lastFrame)return;const im=cv;const W=lastFrame.width,H=lastFrame.height;cv.width=W;cv.height=H;const g=cv.getContext("2d");g.drawImage(lastFrame,0,0);

@@ -1,0 +1,15 @@
+Sapa web: components and licenses (provenance record, not a legal opinion)
+
+1) yolov8n-pose.onnx (this directory)
+   YOLOv8n-pose by Ultralytics, ONNX export published as Xenova/yolov8n-pose on Hugging Face.
+   License: AGPL-3.0 (model card metadata "license: agpl-3.0",
+   https://huggingface.co/Xenova/yolov8n-pose). Upstream: https://github.com/ultralytics/ultralytics
+   This is the same file as app/src/main/assets/yolov8n-pose.onnx in this repository.
+   This page's code and the Android app are distributed under AGPL-3.0 (see LICENSE in the repository root).
+   Corresponding source for this page: https://github.com/irvan-putra/sapa (directory site/).
+
+2) ONNX Runtime Web 1.31.1 (ort/ directory: ort.wasm.min.js, ort-wasm-simd-threaded.mjs, ort-wasm-simd-threaded.wasm)
+   License: MIT, Copyright (c) Microsoft Corporation. Text: ort/LICENSE-onnxruntime-web-MIT.txt
+   Unmodified files from the onnxruntime-web npm package.
+
+No third-party service is called. No fees, accounts or keys are involved.
