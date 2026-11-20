@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sapa on the web</title>
+<link rel="icon" href="icon.png">
+<style>
+:root{--bg:#f4efec;--fg:#232826;--mut:#5d6762;--card:#fff;--ac:#4e7f72;--red:#c9303b;--ln:#ddd5d0}
+@media(prefers-color-scheme:dark){:root{--bg:#171a19;--fg:#e8ece9;--mut:#9aa6a0;--card:#1f2422;--ac:#73a89a;--ln:#2e3633}}
+*{box-sizing:border-box}body{margin:0;font:16px/1.5 system-ui,sans-serif;background:var(--bg);color:var(--fg)}
+main{max-width:760px;margin:0 auto;padding:16px;overflow-x:hidden}
+h1{font-size:1.5rem;margin:.3em 0;display:flex;gap:10px;align-items:center}h1 img{width:40px;height:40px;border-radius:9px}
+h2{font-size:1.05rem;margin:1.3em 0 .4em}
+.card{background:var(--card);border:1px solid var(--ln);border-radius:12px;padding:14px;margin:12px 0}
+.note{color:var(--mut);font-size:.9rem}.warn{border-left:4px solid #c08a2b}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0}
+button,select,input[type=text],input[type=number]{font:inherit;padding:8px 12px;border-radius:8px;border:1px solid var(--ln);background:var(--card);color:var(--fg);min-height:40px}
+button.p{background:var(--ac);color:#fff;border:0}button.r{background:var(--red);color:#fff;border:0}
+button:disabled{opacity:.5}
+.m{display:flex;gap:8px}.m div{flex:1;background:var(--card);border:1px solid var(--ln);border-radius:12px;padding:10px;text-align:center}.m b{display:block;font-size:1.8rem}
+.stage{position:relative;background:#000;border-radius:12px;overflow:hidden;min-height:120px}
+.stage video,.stage canvas{display:block;width:100%;height:auto}.stage canvas{position:absolute;inset:0;height:100%}
+#pk{font-size:1.2rem;font-weight:700;text-align:center;margin:8px 0}
+a{color:var(--ac)}
+</style></head><body><main>
+<h1><img src="icon.png" alt="">Sapa on the web</h1>
+<p>Counts the people your camera sees, counts raised hands, runs question rounds and picks a random person. The model runs in this page, in your browser. Camera frames are never saved or sent anywhere, and nothing is identified by name.</p>
+<div class="card warn note"><b>Limits.</b> It only counts people the camera can see: hidden, tiny, far or dark people are missed and a packed room will undercount. A round result is the most hands seen in a single frame, not unique voters. This is a test port of the Android app's counter (the Android build has also not been validated in a real room yet). Needs HTTPS and camera permission. Phone browsers may stop the camera when the tab is hidden or the screen locks. The optional online Jev features (photo question, round insight) stay Android-only: they need an API key.</div>
+
+<div class="m"><div><b id="mp">0</b>people</div><div><b id="mh">0</b>hands up now</div><div><b id="mk">0</b>most hands at once</div></div>
+<p class="note" id="src">source: camera</p>
+<div class="row"><button class="p" id="cam">Start camera</button><label class="row"><input type="checkbox" id="wide"> Wide-room scan (7 passes, slower)</label>
+<button id="photo">Check a photo…</button><input type="file" id="pf" accept="image/*" hidden></div>
+<div class="stage" id="stage"><video id="v" playsinline muted></video><canvas id="o"></canvas></div>
+<p class="note" id="st">Camera off. Manual numbers and the number picker still work.</p>
+
+<h2>Manual numbers (fallback)</h2>
+<div class="card"><label><input type="checkbox" id="man"> Use manual numbers</label>
+<div class="row">People <button data-a="p-1">-</button><button data-a="p+1">+</button> Hands <button data-a="h-1">-</button><button data-a="h+1">+</button></div></div>
+
+<h2>Question round</h2>
+<div class="card"><div class="row"><input type="text" id="q" placeholder="Question (optional)" style="flex:1;min-width:10em">
+<select id="dur"><option value="5">5 s</option><option value="8" selected>8 s</option><option value="12">12 s</option></select>
+<button class="p" id="rnd">Ask: count hands</button></div>
+<pre id="log" class="note" style="white-space:pre-wrap;margin:6px 0 0">(no rounds yet)</pre></div>
+
+<h2>Random audience pick</h2>
+<div class="card"><p class="note">Choose the pool each time. The picture freezes on the picked person (yellow box). It cannot know names.</p>
+<div class="row"><button class="p" id="pe">Everyone seen</button><button class="r" id="ph">Raised hands</button><button id="un">Unfreeze</button></div>
+<div id="pk">-</div><div class="row"><button id="pn">Random number 1..N (no camera)</button></div></div>
+
+<p class="note">Detection: YOLOv8n-pose (Ultralytics, AGPL-3.0) with ONNX Runtime Web (MIT), both served from this site. Source (AGPL-3.0): <a href="https://github.com/irvan-putra/sapa">sapa</a> · <a href="https://github.com/irvan-putra/sapa/releases">Android app</a> · <a href="https://vanipy.com/kaji/apk/">all apps</a></p>
+</main>
+<script src="ort/ort.wasm.min.js"></script>
+<script>
+"use strict";
+const S=640,CONF=.30,KP=.40,NMS=.5,ACC_FULL=.40,ACC_TILE=.50,EV=.5,MINKP=5;
+const $=id=>document.getElementById(id);
+let session=null,stream=null,running=false,busy=false,frozen=false,hist=[],poses=[],lastFrame=null,peak=0,roundPeople=0,roundUntil=0,people=0,hands=0,mP=0,mH=0,log=[],pickedIdx=-1;
+const work=document.createElement("canvas");
+function iou(a,b){const ax0=a.cx-a.w/2,ay0=a.cy-a.h/2,ax1=a.cx+a.w/2,ay1=a.cy+a.h/2,bx0=b.cx-b.w/2,by0=b.cy-b.h/2,bx1=b.cx+b.w/2,by1=b.cy+b.h/2;
+ const iw=Math.max(0,Math.min(ax1,bx1)-Math.max(ax0,bx0)),ih=Math.max(0,Math.min(ay1,by1)-Math.max(ay0,by0)),i=iw*ih;return i/(a.w*a.h+b.w*b.h-i+1e-9)}
+function decode(o,n,nw,nh){ // o: Float32Array [56*n]
+ let d=[];for(let i=0;i<n;i++){if(o[4*n+i]<CONF)continue;const x={cx:o[i],cy:o[n+i],w:o[2*n+i],h:o[3*n+i],conf:o[4*n+i],kp:new Float32Array(51)};for(let k=0;k<51;k++)x.kp[k]=o[(5+k)*n+i];d.push(x)}
+ d.sort((a,b)=>b.conf-a.conf);const keep=[];for(const x of d){if(keep.every(k=>iou(x,k)<=NMS))keep.push(x)}
+ const fx=S/nw,fy=S/nh;for(const x of keep){x.cx=x.cx/S*fx;x.w=x.w/S*fx;x.cy=x.cy/S*fy;x.h=x.h/S*fy;for(let k=0;k<17;k++){x.kp[k*3]=x.kp[k*3]/S*fx;x.kp[k*3+1]=x.kp[k*3+1]/S*fy}}
+ return keep}
+function vis(d){let n=0;for(let k=0;k<17;k++)if(d.kp[k*3+2]>=EV)n++;return n}
+function accept(d,full){if(d.conf<(full?ACC_FULL:ACC_TILE))return false;if(vis(d)<MINKP)return false;const k=d.kp;
+ const sh=k[17]>=EV||k[20]>=EV;let head=false;for(let i=0;i<5;i++)if(k[i*3+2]>=EV)head=true;const hip=k[35]>=EV||k[38]>=EV;
+ if(!(sh&&(head||hip)))return false;if(!full&&d.w>.9&&d.h>.9)return false;return d.w*d.h>=.002}
+function toPerson(d,tx,ty,tw,th){const p={};p.x0=tx+Math.max(0,d.cx-d.w/2)*tw;p.x1=tx+Math.min(1,d.cx+d.w/2)*tw;p.y0=ty+Math.max(0,d.cy-d.h/2)*th;p.y1=ty+Math.min(1,d.cy+d.h/2)*th;
+ const k=d.kp,noseOk=k[2]>=KP;p.nx=tx+(noseOk?k[0]:d.cx)*tw;p.ny=ty+(noseOk?k[1]:d.cy-d.h/2)*th;const margin=.06*d.h;let r=false;
+ for(const w of [9,10]){const wy=k[w*3+1],wc=k[w*3+2];if(wc<KP)continue;
+  if(noseOk){if(wy<k[1]-margin)r=true}else if(k[17]>=KP&&k[20]>=KP){if(wy<Math.min(k[16],k[19])-margin)r=true}}
+ p.raised=r;p.conf=d.conf;return p}
+function boxIou(a,b){const iw=Math.max(0,Math.min(a.x1,b.x1)-Math.max(a.x0,b.x0)),ih=Math.max(0,Math.min(a.y1,b.y1)-Math.max(a.y0,b.y0)),i=iw*ih,ua=(a.x1-a.x0)*(a.y1-a.y0)+(b.x1-b.x0)*(b.y1-b.y0)-i;return ua<=0?0:i/ua}
+function merge(all,add){for(const n of add){const dup=all.find(o=>boxIou(o,n)>.4||Math.hypot(o.nx-n.nx,o.ny-n.ny)<.02);if(dup){if(n.raised)dup.raised=true}else all.push(n)}}
+function confirm(cur,prev){return cur.filter(c=>prev.some(f=>f.some(o=>boxIou(o,c)>.3)))}
+async function infer(src,sx,sy,sw,sh){ // src: canvas/video/image, crop rect in source pixels
+ const sc=S/Math.max(sw,sh),nw=Math.round(sw*sc),nh=Math.round(sh*sc);
+ work.width=S;work.height=S;const c=work.getContext("2d",{willReadFrequently:true});c.fillStyle="rgb(114,114,114)";c.fillRect(0,0,S,S);c.drawImage(src,sx,sy,sw,sh,0,0,nw,nh);
+ const px=c.getImageData(0,0,S,S).data,inp=new Float32Array(3*S*S),pl=S*S;
+ for(let y=0;y<S;y++)for(let x=0;x<S;x++){const i=y*S+x,q=i*4;if(x<nw&&y<nh){inp[i]=px[q]/255;inp[pl+i]=px[q+1]/255;inp[2*pl+i]=px[q+2]/255}else{inp[i]=inp[pl+i]=inp[2*pl+i]=114/255}}
+ const res=await session.run({[session.inputNames[0]]:new ort.Tensor("float32",inp,[1,3,S,S])});
+ const out=res[session.outputNames[0]];return decode(out.data,out.dims[2],nw,nh)}
+async function count(src,W,H,wide){const all=[];for(const d of await infer(src,0,0,W,H))if(accept(d,true))all.push(toPerson(d,0,0,1,1));
+ if(wide){for(const x of [0,.25,.5])for(const y of [0,.4]){const cx=Math.round(x*W),cy=Math.round(y*H),cw=Math.min(Math.round(.5*W),W-cx),ch=Math.min(Math.round(.6*H),H-cy),add=[];
+  for(const d of await infer(src,cx,cy,cw,ch))if(accept(d,false))add.push(toPerson(d,x,y,.5,.6));merge(all,add)}}
+ all.sort((a,b)=>a.x0-b.x0);return all}
+async function loadModel(){if(session)return;$("st").textContent="Loading model (about 13 MB)...";
+ ort.env.wasm.numThreads=1;ort.env.wasm.proxy=true;ort.env.wasm.wasmPaths=new URL("ort/",location.href).href;session=await ort.InferenceSession.create("yolov8n-pose.onnx",{executionProviders:["wasm"]})}
+function effP(){return $("man").checked?mP:people}function effH(){return $("man").checked?mH:hands}
+function render(){$("mp").textContent=effP();$("mh").textContent=effH();$("mk").textContent=peak;$("src").textContent="source: "+($("man").checked?`manual numbers (people ${mP}, hands ${mH})`:"camera")}
+const cv=$("o");
+function draw(list,W,H,chosen){cv.width=W;cv.height=H;const g=cv.getContext("2d");g.clearRect(0,0,W,H);g.lineWidth=Math.max(2,W/200);
+ list.forEach((p,i)=>{g.strokeStyle=i===chosen?"#ffd400":p.raised?"#ff4a55":"#4cd0a8";g.lineWidth=i===chosen?Math.max(5,W/80):Math.max(2,W/200);g.strokeRect(p.x0*W,p.y0*H,(p.x1-p.x0)*W,(p.y1-p.y0)*H)})}
+function status(s){$("st").textContent=s}
+async function loop(){
+ const v=$("v");
+ while(running){
+  if(frozen||busy||v.readyState<2){await new Promise(r=>setTimeout(r,120));continue}
+  busy=true;try{
+   const W=v.videoWidth,H=v.videoHeight,t0=performance.now();
+   const fc=document.createElement("canvas");fc.width=W;fc.height=H;fc.getContext("2d").drawImage(v,0,0,W,H);
+   const raw=await count(fc,W,H,$("wide").checked),list=confirm(raw,hist);hist.unshift(raw);hist.length=Math.min(hist.length,2);
+   if(frozen)continue;lastFrame=fc;poses=list;people=list.length;hands=list.filter(p=>p.raised).length;
+   if(roundUntil>0){peak=Math.max(peak,effH());roundPeople=Math.max(roundPeople,effP());const left=Math.ceil((roundUntil-Date.now())/1000);if(left<=0)endRound();else status("Raise your hands now! "+left+" s")}
+   draw(list,W,H,-1);render();if(roundUntil===0)status("Running. Last update "+Math.round(performance.now()-t0)+" ms.")
+  }catch(e){status("Scan error: "+e.message)}finally{busy=false}
+ }}
+async function startCam(){
+ $("cam").disabled=true;
+ try{await loadModel()}catch(e){status("Model failed: "+e.message+". Manual mode still works.");$("cam").disabled=false;return}
+ try{stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"},width:{ideal:1280},height:{ideal:960}},audio:false})}
+ catch(e){status("Camera unavailable ("+e.name+"). Manual +/- and the number picker still work.");$("cam").disabled=false;return}
+ const v=$("v");v.srcObject=stream;await v.play();running=true;frozen=false;hist=[];$("cam").textContent="Stop camera";$("cam").disabled=false;status("Running (YOLOv8n-pose in your browser). Counts only people the camera can see.");loop()}
+function stopCam(){running=false;if(stream)stream.getTracks().forEach(t=>t.stop());stream=null;$("v").srcObject=null;hist=[];$("cam").textContent="Start camera";status("Camera off.");cv.getContext("2d").clearRect(0,0,cv.width,cv.height)}
+$("cam").onclick=()=>running?stopCam():startCam();
+document.addEventListener("visibilitychange",()=>{if(document.hidden&&running)stopCam()});
+$("photo").onclick=()=>$("pf").click();
+$("pf").onchange=async e=>{const f=e.target.files[0];e.target.value="";if(!f)return;
+ try{await loadModel();status("Checking photo...");const im=await createImageBitmap(f);const fc=document.createElement("canvas");fc.width=im.width;fc.height=im.height;fc.getContext("2d").drawImage(im,0,0);
+  if(running)stopCam();
+  const list=await count(fc,fc.width,fc.height,$("wide").checked);poses=list;lastFrame=fc;people=list.length;hands=list.filter(p=>p.raised).length;frozen=true;
+  const v=$("v");v.style.visibility="hidden";draw(list,fc.width,fc.height,-1);cv.style.background="#000";cv.getContext("2d").save();
+  status(`Photo: ${people} people, ${hands} raised hands (one pass, no two-frame check; the photo stays in this browser).`);render();showFrozen()}catch(x){status("Photo check failed: "+x.message)}};
+function showFrozen(){if(!lastFrame)return;const im=cv;const W=lastFrame.width,H=lastFrame.height;cv.width=W;cv.height=H;const g=cv.getContext("2d");g.drawImage(lastFrame,0,0);
+ poses.forEach((p,i)=>{g.strokeStyle=i===pickedIdx?"#ffd400":p.raised?"#ff4a55":"#4cd0a8";g.lineWidth=i===pickedIdx?Math.max(5,W/80):Math.max(2,W/200);g.strokeRect(p.x0*W,p.y0*H,(p.x1-p.x0)*W,(p.y1-p.y0)*H)});
+ cv.style.position="relative";cv.style.height="auto";$("v").style.display="none"}
+function unfreeze(){frozen=false;pickedIdx=-1;$("pk").textContent="-";cv.style.position="";cv.style.height="";cv.style.background="";$("v").style.display="";$("v").style.visibility="";cv.getContext("2d").clearRect(0,0,cv.width,cv.height)}
+$("un").onclick=unfreeze;
+document.querySelectorAll("[data-a]").forEach(b=>b.onclick=()=>{const a=b.dataset.a,d=a[1]==="+"?1:-1;if(!$("man").checked){mP=people;mH=hands}if(a[0]==="p")mP=Math.max(0,mP+d);else mH=Math.max(0,mH+d);$("man").checked=true;render()});
+$("man").onchange=()=>{if($("man").checked){mP=people;mH=hands}render()};
+function line(q,h,p){return `Q${log.length+1} ${q.trim()||"-"}: ${h} hands / ${p} people`+(p>0?` (${Math.round(100*h/p)}%)`:"")}
+function showLog(){$("log").textContent=log.length?log.join("\n"):"(no rounds yet)"}
+$("rnd").onclick=()=>{if(!running&&!$("man").checked){status("Start the camera first, or tick manual numbers.");return}
+ if(!running){log.push(line($("q").value,mH,mP));showLog();return}
+ peak=0;roundPeople=0;roundUntil=Date.now()+(+$("dur").value)*1000;$("rnd").disabled=true;status("Raise your hands now!")};
+function endRound(){roundUntil=0;$("rnd").disabled=false;log.push(line($("q").value,peak,roundPeople));showLog();status(`Round done: peak ${peak} hands of ${roundPeople} people.`)}
+function rnd(n){const a=new Uint32Array(1);crypto.getRandomValues(a);return a[0]%n}
+function pick(handsOnly){if(!running&&!lastFrame){$("pk").textContent="Start the camera first.";return}
+ const idx=[];poses.forEach((p,i)=>{if(!handsOnly||p.raised)idx.push(i)});if(!idx.length){$("pk").textContent=handsOnly?"No raised hands right now.":"Nobody visible.";return}
+ const c=idx[rnd(idx.length)];frozen=true;pickedIdx=c;showFrozen();$("pk").textContent=`Picked #${c+1} of ${idx.length} (${handsOnly?"raised hands":"everyone seen"}) - yellow box`}
+$("pe").onclick=()=>pick(false);$("ph").onclick=()=>pick(true);
+$("pn").onclick=()=>{const n=effP();if(n<1){$("pk").textContent="Set a people count first (manual +).";return}$("pk").textContent=`Number ${rnd(n)+1} of ${n} (count off from the left/front)`};
+render();
+</script></body></html>
