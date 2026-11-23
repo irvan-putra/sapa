@@ -1,6 +1,6 @@
 {
   "sha256": {
-    "app/src/main/res/drawable/ic_launcher.png": "4149b9088ad24482658314d1a45e6c9730df5d2175800859eea78d9b080082da"
+    "app/src/main/res/drawable/ic_launcher.png": "0f87bd0f6cc7c872587a6ee620edf6997951de61b0182629f4c02fd0a4fbef58"
   },
-  "version": "0.5.8"
+  "version": "0.5.9"
 }

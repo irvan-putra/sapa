@@ -42,8 +42,8 @@ jobs:
       # SET: 64 hex digits (uppercase) of the key certificate, printed by the key generator. Not a secret.
       EXPECTED_CERT_SHA256: B7A36D4D61714B8EEEC775139985254C7AB2BF071F8BCCF02D7681C43C288889
       # SET per release: must equal app/build.gradle and the icon badge. Edit in the release commit.
-      EXPECTED_VERSION_NAME: '0.5.8'
-      EXPECTED_VERSION_CODE: '15'
+      EXPECTED_VERSION_NAME: '0.5.9'
+      EXPECTED_VERSION_CODE: '16'
       EXPECTED_PACKAGE: com.vanipy.sapa
       EXPECTED_LABEL: sapa
       BUILD_TOOLS_VERSION: 34.0.0
