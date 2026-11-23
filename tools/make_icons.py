@@ -98,10 +98,10 @@ def parse_version(argv, fallback=None):
 
 
 def write_densities(img, res_dir, name="ic_launcher.png"):
-    for dens, px in DENSITIES.items():
-        out = os.path.join(res_dir, "mipmap-" + dens)
-        os.makedirs(out, exist_ok=True)
-        img.resize((px, px), Image.LANCZOS).save(os.path.join(out, name), optimize=True)
+    """Write the single 192px family drawable, without density variants."""
+    out = os.path.join(res_dir, "drawable")
+    os.makedirs(out, exist_ok=True)
+    img.resize((192, 192), Image.LANCZOS).save(os.path.join(out, name), optimize=True)
 
 
 BG = (234, 242, 251, 255)
@@ -149,10 +149,7 @@ def main():
     sticker = sticker.crop(sticker.getbbox())
     res = os.path.join(root, "app/src/main/res")
     write_densities(legacy(version, sticker), res)
-    for dens, px in (("mdpi", 108), ("hdpi", 162), ("xhdpi", 216), ("xxhdpi", 324), ("xxxhdpi", 432)):
-        foreground(version, sticker, 432).resize((px, px), Image.LANCZOS).save(
-            os.path.join(res, "mipmap-" + dens, "ic_launcher_foreground.png"), optimize=True)
-    files = sorted(glob.glob(os.path.join(res, "mipmap-*", "ic_launcher*.png")))
+    files = [os.path.join(res, "drawable", "ic_launcher.png")]
     manifest = {"version": version,
                 "sha256": {os.path.relpath(p, root): hashlib.sha256(open(p, "rb").read()).hexdigest() for p in files}}
     with open(os.path.join(here, "icon-manifest.json"), "w") as fh:

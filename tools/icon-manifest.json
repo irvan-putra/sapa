@@ -1,15 +1,6 @@
 {
   "sha256": {
-    "app/src/main/res/mipmap-hdpi/ic_launcher.png": "f20534a6053df9d3381c542da468722a3412164e0c8f326fbc79c3681e51182e",
-    "app/src/main/res/mipmap-hdpi/ic_launcher_foreground.png": "246819fb40bdfb25ec6d0194f96140abfd19ea0efa6bee69d73247c53c560e95",
-    "app/src/main/res/mipmap-mdpi/ic_launcher.png": "c66a06e68e4387f1220f179a079c569b355a584c2de1ff3980e8c3ab215141e7",
-    "app/src/main/res/mipmap-mdpi/ic_launcher_foreground.png": "ea339b7cdec6a39253a06417a083eab0ca423e50cb2f6816312f5213840c7712",
-    "app/src/main/res/mipmap-xhdpi/ic_launcher.png": "fbcf70352bc067933482855831765456e01dd26a21af5279b6decf4e7560554a",
-    "app/src/main/res/mipmap-xhdpi/ic_launcher_foreground.png": "90dacdd9dd1f19e8b3aec6604cc4c999244f8194047e4909a7b92bd85bf28fd6",
-    "app/src/main/res/mipmap-xxhdpi/ic_launcher.png": "f3c469d38dad862f6cf0c3e3fde091e24acab97eb67ae948dd583afd7b6a4ed0",
-    "app/src/main/res/mipmap-xxhdpi/ic_launcher_foreground.png": "8a9dd30bb55a18c8a129ac30776c5909ca5e1b61b91684125c3d2c9d9bfd1bff",
-    "app/src/main/res/mipmap-xxxhdpi/ic_launcher.png": "4149b9088ad24482658314d1a45e6c9730df5d2175800859eea78d9b080082da",
-    "app/src/main/res/mipmap-xxxhdpi/ic_launcher_foreground.png": "3d386194efbb225c561247d018cc91cdea479cfc4b5c86d036826239d9507632"
+    "app/src/main/res/drawable/ic_launcher.png": "4149b9088ad24482658314d1a45e6c9730df5d2175800859eea78d9b080082da"
   },
   "version": "0.5.8"
 }
