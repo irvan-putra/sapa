@@ -39,3 +39,7 @@ v0.5.3: the main people and hands counters now read YOLO / Jev (live on-phone YO
 v0.5.4: the send-confirmation popup is replaced by a Send photos to Jev toggle. It is OFF by default and returns to OFF when the app restarts. OFF: Check a photo and Check camera frame count on the phone only and send nothing. ON: each tap sends that one picture to Jev right away with no confirmation; no background or continuous upload. Layout and live Jev request not verified on a phone.
 
 v0.5.5: DIAGNOSTIC build, not a proven fix. The API-key entry field moved from the main screen into a Key settings dialog (still masked, key still stored encrypted and used as before), to test whether a whole-app black screen during Google Meet screen sharing goes away. The cause is unconfirmed; the code has no secure-window flags. Not tested on a phone.
+
+---
+
+Built with AI assistance (Instinct and others). Not everything has been reviewed by Irvan.
