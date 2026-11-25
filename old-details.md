@@ -1,0 +1,59 @@
+# Old details (archived before refresh)
+
+Archived on 25 November 2026 as part of the repository details refresh. The README below was already compliant, so it was kept unchanged; this file preserves the pre-refresh state for the record.
+
+## About description (before)
+
+Camera audience counter, hands-up per question and random picker (Android)
+
+## Website field (before)
+
+(empty)
+
+## README.md (before)
+
+# Audience Moderator (Android)
+
+A small helper for an event moderator.
+
+Features
+- People counter: counts people the camera can see (on-device MediaPipe pose model, Lite or Full).
+- Hands-up counter: a raised hand is a wrist clearly above the nose.
+- Question rounds: peak hands over 5/8/12 seconds, logged per question.
+- Random audience pick: separate buttons for "everyone seen" and "raised hands". The frame freezes with a yellow box on the picked person.
+- Manual +/- fallback and a no-camera random number picker.
+
+Privacy: counting, hands and the random pick run on the phone. Camera pictures are never saved, and are sent only if you use the optional Photo question (see below), and there is no face recognition or identity matching (boxes and positions only, never names). The app has the INTERNET permission only for the optional, off-by-default Round insight: when you switch it on and save your own TypeSafe API key, each round sends only the question text and the hand/people counts to TypeSafe's Jev model at https://api.typesafe.ai/v1/systemone. The key is stored encrypted with an Android Keystore key, is not in this repository and is never logged.
+
+Limits: people who are hidden, tiny, far away or in the dark are missed; a packed room will undercount. Wide-room scan splits the picture into tiles to see farther people but updates more slowly.
+
+Build: `gradle assembleDebug` (JDK 17, Android SDK 34). Debug APK, arm64 only. Models: Google MediaPipe pose_landmarker lite/full (Apache-2.0).
+
+## Engine and licence
+Detection uses YOLOv8n-pose (Ultralytics, AGPL-3.0) exported to ONNX (from Hugging Face Xenova/yolov8n-pose) and run with ONNX Runtime (MIT). Because of the YOLOv8 weights this repository is licensed AGPL-3.0 (see LICENSE). Source is public.
+A round result is the most hands seen in a single camera frame during the window, not a count of unique voters.
+Tests: `PoseMath` (box mapping, raised-hand rule, tile merge) is plain Java and was checked on a JVM; the APK itself has not been run on a device at time of writing.
+
+Round insight uses the official TypeSafe API (docs.typesafe.ai): POST /v1/systemone with Authorization: Bearer <key>, model jev-latest, one Choice and one Noul question. It was tested against a local mock server only, not the live service.
+
+## v0.4 changes (false-positive repair)
+An empty furnished room was counted as 5 people on a Galaxy A24 (v0.3). v0.4 adds an evidence check (clear score, at least 5 body points, a shoulder plus a head or hip point, no tile-sized boxes), a two-frame confirmation before a person is counted, and shows each box's score. The wide-room scan is now off by default (about 4 s per update on the A24). Counts are still estimates: use the manual +/- buttons to correct them. The app screen now lists the models used.
+
+## v0.4.1 (crash fix)
+v0.4 crashed whenever Start camera was tapped: the "Models used" panel was missing from the screen code while the camera start still tried to update it (a null field). v0.4.1 adds the panel for real, guards the update, and keeps a local-only crash note (class names and code lines, no messages) that is shown on the next launch. Not yet tested on a phone.
+
+Icon: the launcher icon is a sticker image supplied by the app owner; its original source and license are not known to the author.
+
+Photo question (v0.5.0, optional, experimental): TypeSafe marks Jev's image input as experimental (header TypeSafe-Danger-Zone-Images, docs.typesafe.ai/go/images). The app sends one photo only after you pick it (or choose the current camera frame), see it in a preview and tap Send. It asks whether hands are raised and never to identify anyone, and shows the answer as a second opinion that never changes the counts. It needs your own TypeSafe key and credits. Tested only against a local mock server, not the live service and not on a phone.
+
+v0.5.2: the photo check is at the top of the screen. For the photo you confirm, it shows on-phone YOLO counts next to Jev's estimate (people and raised-hand counts, answered as choices 0 to 30 or more). Both numbers refer to the same single picture. YOLO runs one pass with no two-frame check there, so it can differ from the live camera numbers. Jev's counts are experimental and untested on the live service.
+
+v0.5.3: the main people and hands counters now read YOLO / Jev (live on-phone YOLO, Jev from the last photo you sent). The Jev part is from that photo, not live, and a note line says when it was sent. Peak has no Jev value. Layout not yet seen on a phone.
+
+v0.5.4: the send-confirmation popup is replaced by a Send photos to Jev toggle. It is OFF by default and returns to OFF when the app restarts. OFF: Check a photo and Check camera frame count on the phone only and send nothing. ON: each tap sends that one picture to Jev right away with no confirmation; no background or continuous upload. Layout and live Jev request not verified on a phone.
+
+v0.5.5: DIAGNOSTIC build, not a proven fix. The API-key entry field moved from the main screen into a Key settings dialog (still masked, key still stored encrypted and used as before), to test whether a whole-app black screen during Google Meet screen sharing goes away. The cause is unconfirmed; the code has no secure-window flags. Not tested on a phone.
+
+---
+
+Built with AI assistance (Instinct and others). Not everything has been reviewed by Irvan.
